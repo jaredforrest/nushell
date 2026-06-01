@@ -1,4 +1,5 @@
 use nu_engine::command_prelude::*;
+use nu_protocol::config::AbbrPosition;
 
 #[derive(Clone)]
 pub struct AbbreviationsList;
@@ -36,16 +37,26 @@ impl Command for AbbreviationsList {
         let config = stack.get_config(engine_state);
         let span = call.head;
 
-        let mut abbreviations: Vec<(&String, &String)> = config.abbreviations.iter().collect();
-        abbreviations.sort_by_key(|(k, _)| *k);
+        let mut abbreviations: Vec<_> = config.abbreviations.iter().collect();
+        abbreviations.sort_by_key(|(name, _)| *name);
 
         let records = abbreviations
             .into_iter()
-            .map(|(name, expansion)| {
+            .map(|(name, def)| {
                 Value::record(
                     record! {
                         "name" => Value::string(name, span),
-                        "expansion" => Value::string(expansion, span),
+                        "expansion" => Value::string(&def.expansion, span),
+                        "position" => Value::string(
+                            match def.position {
+                                AbbrPosition::Command => "command",
+                                AbbrPosition::Anywhere => "anywhere",
+                            },
+                            span,
+                        ),
+                        "cursor_marker" => def.cursor_marker
+                            .as_ref()
+                            .map_or_else(|| Value::nothing(span), |marker| Value::string(marker, span)),
                     },
                     span,
                 )

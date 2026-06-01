@@ -589,17 +589,19 @@ $env.config.keybindings = []
 # -------------
 
 # abbreviations (record): User-defined abbreviations for Reedline.
-# Each element is a string pair that defines an abbreviation and its
-# corresponding expansion.
+# Each element is either a string expansion or a record with expansion options.
+# String values expand anywhere; record values default to command position.
 # See https://www.nushell.sh/book/line_editor.html#abbreviations for details.
+#
 # Default: {}
 $env.config.abbreviations = {}
 
-# Example: add abbreviations for common commands: 
+# Example: add abbreviations for common commands:
 # $env.config.abbreviations = {
 #   gs: "git status",
 #   ll: "ls -l",
-#   ptop: "ps | sort-by -r cpu | first 10"
+#   ptop: "ps | sort-by -r cpu | first 10",
+#   gcm: { expansion: "git commit --message \"%\"", cursor_marker: "%" },
 # }
 
 # -----

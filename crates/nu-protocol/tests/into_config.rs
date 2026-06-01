@@ -108,6 +108,33 @@ fn config_add_unsupported_value() -> Result {
 }
 
 #[test]
+fn config_abbreviation_rejects_empty_cursor_marker() -> Result {
+    let mut tester = test();
+    let shell_error = tester
+        .run(
+            r#"$env.config = {
+                abbreviations: {
+                    gcm: {
+                        expansion: "git commit -m",
+                        cursor_marker: "",
+                    }
+                }
+            }"#,
+        )
+        .expect_shell_error()?;
+    let [err] = config_error(&shell_error)?;
+
+    match err {
+        ConfigError::InvalidValue { path, valid, .. } => {
+            assert_eq!(path, "$env.config.abbreviations.gcm.cursor_marker");
+            assert!(valid.contains("cursor marker"));
+            Ok(())
+        }
+        _ => Err(shell_error.into()),
+    }
+}
+
+#[test]
 fn config_unsupported_key_reverted() -> Result {
     let mut tester = test().cwd(DEFAULT_FILES_DIR);
     let () = tester.run("source default_config.nu")?;

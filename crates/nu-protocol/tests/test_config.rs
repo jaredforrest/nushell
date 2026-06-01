@@ -1,4 +1,4 @@
-use nu_protocol::test_record;
+use nu_protocol::{Span, Value, test_record};
 use nu_test_support::{nu, nu_repl_code, prelude::*};
 use rstest::rstest;
 
@@ -98,6 +98,44 @@ fn abbreviations() -> Result {
         .run("$env.config.abbreviations")
         .expect_value_eq(test_record! {
             "g" => "git --no-pager"
+        })
+}
+
+#[test]
+fn abbreviation_records() -> Result {
+    let mut tester = test();
+    let () = tester.run(
+        r#"$env.config = {
+            abbreviations: {
+                gcm: {
+                    expansion: "git commit -m \"%\"",
+                    cursor_marker: "%",
+                }
+                ll: {
+                    expansion: "ls -la",
+                    position: "command",
+                }
+                gs: {
+                    expansion: "status",
+                    position: "anywhere",
+                }
+            }
+        }"#,
+    )?;
+    tester
+        .run("$env.config.abbreviations")
+        .expect_value_eq(test_record! {
+            "gcm" => test_record! {
+                "expansion" => "git commit -m \"%\"",
+                "position" => "command",
+                "cursor_marker" => "%",
+            },
+            "ll" => test_record! {
+                "expansion" => "ls -la",
+                "position" => "command",
+                "cursor_marker" => Value::nothing(Span::test_data()),
+            },
+            "gs" => "status"
         })
 }
 

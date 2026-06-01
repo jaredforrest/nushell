@@ -1,6 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
+mod abbreviator;
 mod commands;
 mod completions;
 mod config_files;

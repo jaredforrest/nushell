@@ -8,7 +8,7 @@ use nu_protocol::{
     ast::{Block, Expr, Expression, PipelineRedirection, RecordItem},
     engine::{EngineState, Stack, StateWorkingSet},
 };
-use reedline::{Highlighter, StyledText};
+use reedline::{AbbrExpandContext, Highlighter, StyledText};
 use std::sync::{Arc, Mutex};
 
 /// A highlighter that does nothing
@@ -57,7 +57,16 @@ impl Highlighter for NuHighlighter {
         result.text
     }
 
-    fn is_inside_string_literal(&self, line: &str, cursor: usize) -> bool {
+    fn should_expand_abbr(&self, line: &str, cursor: usize, _context: AbbrExpandContext) -> bool {
+        !self.is_inside_string_literal_or_external_arg(line, cursor)
+    }
+}
+
+impl NuHighlighter {
+    fn contains_shape_at<F>(&self, line: &str, cursor: usize, shape_matches: F) -> bool
+    where
+        F: Fn(&FlatShape) -> bool,
+    {
         let (global_span_offset, shapes) = match self
             .cache
             .lock()
@@ -78,15 +87,20 @@ impl Highlighter for NuHighlighter {
         };
 
         let global_cursor = cursor + global_span_offset;
-        shapes.iter().any(|(span, shape)| {
-            span.contains(global_cursor)
-                && matches!(
-                    shape,
-                    FlatShape::String
-                        | FlatShape::RawString
-                        | FlatShape::StringInterpolation
-                        | FlatShape::ExternalArg
-                )
+        shapes
+            .iter()
+            .any(|(span, shape)| span.contains(global_cursor) && shape_matches(shape))
+    }
+
+    fn is_inside_string_literal_or_external_arg(&self, line: &str, cursor: usize) -> bool {
+        self.contains_shape_at(line, cursor, |shape| {
+            matches!(
+                shape,
+                FlatShape::String
+                    | FlatShape::RawString
+                    | FlatShape::StringInterpolation
+                    | FlatShape::ExternalArg
+            )
         })
     }
 }
@@ -599,7 +613,7 @@ fn get_char_length(c: char) -> usize {
 mod tests {
     use super::NuHighlighter;
     use nu_protocol::engine::{EngineState, Stack};
-    use reedline::Highlighter;
+    use reedline::{AbbrExpandContext, Highlighter};
     use rstest::rstest;
     use std::sync::Arc;
 
@@ -632,18 +646,38 @@ mod tests {
     // no string
     #[case("1 + 2", 0, false)]
     #[case("1 + 2", 2, false)]
-    // ExternalArg is treated as a string literal to suppress abbreviation expansion in external commands
+    // ExternalArg is suppressed for abbreviation expansion.
     #[case("ls -la", 0, false)] // on 'ls'  — FlatShape::External
     #[case("ls -la", 3, true)] // on '-la' — FlatShape::ExternalArg
     #[case("bash -c \"echo hello\"", 0, false)] // on 'bash'            — FlatShape::External
     #[case("bash -c \"echo hello\"", 5, true)] // on '-c'              — FlatShape::ExternalArg
     #[case("bash -c \"echo hello\"", 10, true)] // inside "echo hello"  — FlatShape::ExternalArg
-    fn test_is_inside_string_literal(
+    fn test_is_inside_suppressed_abbr_shape(
         #[case] line: &str,
         #[case] cursor: usize,
         #[case] expected: bool,
     ) {
         let h = make_highlighter();
-        assert_eq!(h.is_inside_string_literal(line, cursor), expected);
+        assert_eq!(
+            h.is_inside_string_literal_or_external_arg(line, cursor),
+            expected
+        );
+    }
+
+    #[test]
+    fn should_expand_word_abbr_suppresses_external_args() {
+        let h = make_highlighter();
+        assert!(h.should_expand_abbr("1 + 2", 0, AbbrExpandContext::WordAbbreviation));
+        assert!(!h.should_expand_abbr("ls -la", 3, AbbrExpandContext::WordAbbreviation));
+        assert!(!h.should_expand_abbr("bash -c g", 8, AbbrExpandContext::WordAbbreviation));
+        assert!(!h.should_expand_abbr("\"git co", 5, AbbrExpandContext::WordAbbreviation));
+    }
+
+    #[test]
+    fn should_expand_bang_suppresses_external_args() {
+        let h = make_highlighter();
+        assert!(!h.should_expand_abbr("ls !!", 3, AbbrExpandContext::BangExpansion));
+        assert!(!h.should_expand_abbr("\"echo !!", 6, AbbrExpandContext::BangExpansion));
+        assert!(h.should_expand_abbr("\"echo\" !!", 7, AbbrExpandContext::BangExpansion));
     }
 }

@@ -26,6 +26,9 @@ pub use rm::RmConfig;
 pub use shell_integration::ShellIntegrationConfig;
 pub use table::{FooterMode, TableConfig, TableIndent, TableIndexMode, TableMode, TrimStrategy};
 
+pub use abbreviation::{AbbrPosition, AbbreviationDef};
+
+mod abbreviation;
 mod ansi_coloring;
 mod clip;
 mod completions;
@@ -63,7 +66,7 @@ pub struct Config {
     pub hinter: HinterConfig,
     pub history: HistoryConfig,
     pub keybindings: Vec<ParsedKeybinding>,
-    pub abbreviations: HashMap<String, String>,
+    pub abbreviations: HashMap<String, AbbreviationDef>,
     pub menus: Vec<ParsedMenu>,
     pub hooks: Hooks,
     pub rm: RmConfig,
@@ -220,7 +223,12 @@ impl UpdateFromValue for Config {
                     Ok(keybindings) => self.keybindings = keybindings,
                     Err(err) => errors.error(err.into()),
                 },
-                "abbreviations" => self.abbreviations.update(val, path, errors),
+                "abbreviations" => abbreviation::update_abbreviations_from_value(
+                    &mut self.abbreviations,
+                    val,
+                    path,
+                    errors,
+                ),
                 "hooks" => self.hooks.update(val, path, errors),
                 "datetime_format" => self.datetime_format.update(val, path, errors),
                 "error_style" => self.error_style.update(val, path, errors),
